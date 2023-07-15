@@ -36,7 +36,6 @@ class TwitchBot():
         assert self.access_token is not None
         self.user_id = self.api_get_user()['data'][0]['id']
         assert self.user_id is not None
-        print(self.api_get_moderators())
 
     def irc_connect(self, oauth):
         self.oauth = oauth
