@@ -6,6 +6,7 @@ import requests
 from urllib.parse import quote
 from argparse import ArgumentParser
 from configparser import ConfigParser
+import openai
 
 __author__  = '@c3rb3ru5d3d53c'
 __version__ = '1.0.0'
@@ -44,6 +45,30 @@ class TwitchBot():
         self.sock.send(f"PASS oauth:{self.oauth}\r\n".encode())
         self.sock.send(f"NICK {self.username}\r\n".encode())
         self.sock.send(f"JOIN {self.channel}\r\n".encode())
+
+    def openai_connect(self, base, key, model):
+        self.openai_base = base
+        self.openai_key = key
+        self.openai_model = model
+        self.openai = openai
+        self.openai.api_base = self.openai_base
+        self.openai.api_key = self.openai_key
+
+    def openai_get_response(self, message, prefix='In one sentence respond to the following:', limit=500):
+        message = prefix + message
+        r = self.openai.Completion.create(
+            model=self.openai_model,
+            prompt=message,
+            include_prompt=False,
+            max_tokens=64,
+            temperature=0.7,
+            top_p=0.1,
+            n=1,
+            echo=True,
+            stream=False
+        )
+        if len(r['choices']) <= 0: return None
+        return r['choices'][0]['text'][:limit].lstrip(message).replace('\n', ' ')
     
     def irc_listen(self, callback):
         while True:
@@ -128,6 +153,10 @@ def callback(session, message):
             if len(m) > 0: session.irc_send_message(m.rstrip(' '), debug=True)
     if command[0] == 'whoami' and command[0] in session.cfg.sections():
         session.irc_send_message(session.api_get_user()['data'][0]['description'])
+    if command[0] == 'openai' and command[0] in session.cfg.sections() and len(command) > 1:
+        m = session.openai_get_response(' '.join(command[1:]))
+        if m is not None and len(m) > 0: session.irc_send_message(m, debug=True)
+        return None
     if command[0] in session.cfg.sections():
         if 'message' in session.cfg[command[0]]:
             session.irc_send_message(session.cfg[command[0]]['message'], debug=True)
@@ -179,6 +208,11 @@ def main():
             cfg['config']['client_secret'],
             cfg['config']['oauth'])
         bot.irc_connect(cfg['config']['oauth'])
+        bot.openai_connect(
+            cfg['config']['openai_base'],
+            cfg['config']['openai_key'],
+            cfg['config']['openai_model']
+        )
         bot.set_config(cfg)
         bot.irc_listen(callback)
     except KeyboardInterrupt:
